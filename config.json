@@ -1,0 +1,9 @@
+{
+  "appName": "Skills Demo",
+  "version": "1.0.0",
+  "environment": "development",
+  "features": {
+    "logging": true,
+    "debugging": true
+  }
+}

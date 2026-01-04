@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(reading-files-safely)",
+      "Skill(pr-reviewer)",
+      "Bash(test:*)",
+      "Bash(npm test)"
+    ]
+  }
+}
