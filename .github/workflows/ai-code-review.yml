@@ -68,14 +68,14 @@ jobs:
             if grep -A 1 "^#### Critical" claude-review-report.md | grep -q "None identified"; then
               CRITICAL=0
             else
-              CRITICAL=$(sed -n '/^#### Critical/,/^#### /p' claude-review-report.md | grep -c "^- ❌" || echo "0")
+              CRITICAL=$(sed -n '/^#### Critical/,/^#### /p' claude-review-report.md | grep -c "^- ❌" | awk '{print $1}' || echo "0")
             fi
 
             # Major: Count ❌ and ⚠️ bullets between "#### Major" and next "####"
-            MAJOR=$(sed -n '/^#### Major/,/^#### /p' claude-review-report.md | grep -E "^- (❌|⚠️)" | wc -l | tr -d ' ')
+            MAJOR=$(sed -n '/^#### Major/,/^#### /p' claude-review-report.md | grep -E "^- (❌|⚠️)" | wc -l | awk '{print $1}')
 
             # Minor: Count 📝 bullets between "#### Minor" and "---" or next "####"
-            MINOR=$(sed -n '/^#### Minor/,/^---$/p' claude-review-report.md | grep -c "^- 📝" || echo "0")
+            MINOR=$(sed -n '/^#### Minor/,/^---$/p' claude-review-report.md | grep -c "^- 📝" | awk '{print $1}' || echo "0")
 
             # Ensure we have valid numbers
             CRITICAL=${CRITICAL:-0}
