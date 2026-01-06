@@ -1,0 +1,233 @@
+name: AI Code Review
+
+on:
+  pull_request:
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  ai-code-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      statuses: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better context
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run AI Code Review
+        id: ai-review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO_NAME: ${{ github.repository }}
+        run: node scripts/ci-review.js
+        continue-on-error: true
+
+      - name: Generate Review Summary
+        if: always()
+        run: |
+          if [ -f claude-review-report.md ]; then
+            echo "## 🤖 AI Code Review Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            cat claude-review-report.md >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "---" >> $GITHUB_STEP_SUMMARY
+            echo "📥 [Download Full Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Review report not generated" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Extract Review Metadata
+        id: extract-metadata
+        if: always()
+        run: |
+          if [ -f claude-review-report.md ]; then
+            # Extract issue counts by counting numbered list items in each severity section
+            # The CI-generated report uses markdown headers (####) with numbered lists (1., 2., 3., etc.)
+
+            # Critical: Check for "None identified" first, otherwise count numbered items
+            if grep -A 1 "^#### Critical" claude-review-report.md | grep -q "None identified"; then
+              CRITICAL=0
+            else
+              CRITICAL=$(sed -n '/^#### Critical$/,/^#### Major$/p' claude-review-report.md | grep "^[0-9]\+\." | wc -l | awk '{print $1}')
+            fi
+
+            # Major: Count numbered list items between "#### Major" and "#### Minor"
+            MAJOR=$(sed -n '/^#### Major$/,/^#### Minor$/p' claude-review-report.md | grep "^[0-9]\+\." | wc -l | awk '{print $1}')
+
+            # Minor: Count numbered list items between "#### Minor" and next "###" header
+            MINOR=$(sed -n '/^#### Minor$/,/^###/p' claude-review-report.md | grep "^[0-9]\+\." | wc -l | awk '{print $1}')
+
+            # Ensure we have valid numbers
+            CRITICAL=${CRITICAL:-0}
+            MAJOR=${MAJOR:-0}
+            MINOR=${MINOR:-0}
+
+            # Check approval status
+            if grep -q "Changes requested" claude-review-report.md; then
+              STATUS="changes-requested"
+              STATUS_EMOJI="❌"
+            elif grep -q "Approved with minor suggestions" claude-review-report.md; then
+              STATUS="approved-with-suggestions"
+              STATUS_EMOJI="✅"
+            elif grep -q "Approved" claude-review-report.md; then
+              STATUS="approved"
+              STATUS_EMOJI="✅"
+            else
+              STATUS="unknown"
+              STATUS_EMOJI="❓"
+            fi
+
+            echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+            echo "major=$MAJOR" >> $GITHUB_OUTPUT
+            echo "minor=$MINOR" >> $GITHUB_OUTPUT
+            echo "status=$STATUS" >> $GITHUB_OUTPUT
+            echo "status_emoji=$STATUS_EMOJI" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Review Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-review-report
+          path: claude-review-report.md
+          retention-days: 30
+
+      - name: Post PR Comment with Summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          CRITICAL: ${{ steps.extract-metadata.outputs.critical }}
+          MAJOR: ${{ steps.extract-metadata.outputs.major }}
+          MINOR: ${{ steps.extract-metadata.outputs.minor }}
+          STATUS: ${{ steps.extract-metadata.outputs.status }}
+          STATUS_EMOJI: ${{ steps.extract-metadata.outputs.status_emoji }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            try {
+              const reportPath = 'claude-review-report.md';
+              if (fs.existsSync(reportPath)) {
+                const review = fs.readFileSync(reportPath, 'utf8');
+
+                // Build summary header
+                const critical = process.env.CRITICAL || '0';
+                const major = process.env.MAJOR || '0';
+                const minor = process.env.MINOR || '0';
+                const status = process.env.STATUS || 'unknown';
+                const statusEmoji = process.env.STATUS_EMOJI || '❓';
+
+                const summaryTable = [
+                  '| Status | Critical | Major | Minor |',
+                  '|--------|----------|-------|-------|',
+                  `| ${statusEmoji} ${status.replace(/-/g, ' ')} | ${critical} | ${major} | ${minor} |`
+                ].join('\n');
+
+                const separator = '---';
+
+                const commentBody = [
+                  '## 🤖 AI Code Review Report',
+                  '',
+                  '### Review Summary',
+                  summaryTable,
+                  '',
+                  '<details>',
+                  '<summary>📋 Full Review Details</summary>',
+                  '',
+                  review,
+                  '',
+                  '</details>',
+                  '',
+                  separator,
+                  '🔗 [View Full Report in Actions](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})',
+                  '*Powered by Claude Sonnet 4.5 via CI/CD*'
+                ].join('\n');
+
+                // Find existing bot comment
+                const { data: comments } = await github.rest.issues.listComments({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                });
+
+                const botComment = comments.find(comment =>
+                  comment.user.type === 'Bot' &&
+                  comment.body.includes('🤖 AI Code Review')
+                );
+
+                if (botComment) {
+                  // Update existing comment
+                  await github.rest.issues.updateComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: botComment.id,
+                    body: commentBody
+                  });
+                  console.log('Updated existing review comment');
+                } else {
+                  // Create new comment
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    body: commentBody
+                  });
+                  console.log('Created new review comment');
+                }
+              } else {
+                console.log('Review report not found');
+              }
+            } catch (error) {
+              console.error('Error posting comment:', error);
+            }
+
+      # - name: Create Status Check
+      #   if: always() && github.event_name == 'pull_request'
+      #   uses: actions/github-script@v7
+      #   env:
+      #     CRITICAL: ${{ steps.extract-metadata.outputs.critical }}
+      #     MAJOR: ${{ steps.extract-metadata.outputs.major }}
+      #     STATUS_EMOJI: ${{ steps.extract-metadata.outputs.status_emoji }}
+      #   with:
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     script: |
+      #       const critical = process.env.CRITICAL || '0';
+      #       const major = process.env.MAJOR || '0';
+      #       const statusEmoji = process.env.STATUS_EMOJI || '❓';
+      #       const reviewOutcome = '${{ steps.ai-review.outcome }}';
+
+      #       const state = reviewOutcome === 'failure' ? 'failure' : 'success';
+      #       const description = `${statusEmoji} Critical: ${critical}, Major: ${major}`;
+
+      #       await github.rest.repos.createCommitStatus({
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         sha: context.payload.pull_request.head.sha,
+      #         state: state,
+      #         target_url: `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+      #         description: description,
+      #         context: 'AI Code Review Report'
+      #       });
+
+      - name: Check Review Status
+        if: steps.ai-review.outcome == 'failure'
+        run: |
+          echo "⚠️ AI Review found blocking issues"
+          exit 1
