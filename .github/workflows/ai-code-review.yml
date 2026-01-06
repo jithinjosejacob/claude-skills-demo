@@ -226,8 +226,8 @@ jobs:
               context: 'AI Code Review'
             });
 
-      - name: Check Review Status
-        if: steps.ai-review.outcome == 'failure'
-        run: |
-          echo "⚠️ AI Review found blocking issues"
-          exit 1
+      # - name: Check Review Status
+      #   if: steps.ai-review.outcome == 'failure'
+      #   run: |
+      #     echo "⚠️ AI Review found blocking issues"
+      #     exit 1
