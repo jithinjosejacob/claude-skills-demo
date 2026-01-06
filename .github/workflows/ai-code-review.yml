@@ -2,7 +2,6 @@ name: AI Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
@@ -58,35 +57,21 @@ jobs:
         if: always()
         run: |
           if [ -f claude-review-report.md ]; then
-            # Extract issue counts by counting lines in each severity section
-            # The CI-generated report uses plain text format without markdown headers or emoji bullets
+            # Extract issue counts by counting numbered list items in each severity section
+            # The CI-generated report uses markdown headers (####) with numbered lists (1., 2., 3., etc.)
 
-            # Critical: Check for "None identified" first, otherwise count non-empty lines
-            if grep -A 1 "^Critical$" claude-review-report.md | grep -q "None identified"; then
+            # Critical: Check for "None identified" first, otherwise count numbered items
+            if grep -A 1 "^#### Critical" claude-review-report.md | grep -q "None identified"; then
               CRITICAL=0
             else
-              CRITICAL=$(sed -n '/^Critical$/,/^Major$/p' claude-review-report.md | sed '1d;$d' | grep -v "^$" | wc -l | awk '{print $1}')
+              CRITICAL=$(sed -n '/^#### Critical$/,/^#### Major$/p' claude-review-report.md | grep "^[0-9]\+\." | wc -l | awk '{print $1}')
             fi
 
-            # Major: Count non-empty lines between "Major" and "Minor"
-            MAJOR=$(sed -n '/^Major$/,/^Minor$/p' claude-review-report.md | sed '1d;$d' | grep -v "^$" | wc -l | awk '{print $1}')
+            # Major: Count numbered list items between "#### Major" and "#### Minor"
+            MAJOR=$(sed -n '/^#### Major$/,/^#### Minor$/p' claude-review-report.md | grep "^[0-9]\+\." | wc -l | awk '{print $1}')
 
-            # Minor: Count issue lines (non-empty lines that aren't headers, code, or blank)
-            MINOR=$(sed -n '/^Minor$/,/^Recommendations$/p' claude-review-report.md | \
-              grep -v "^$" | \
-              grep -v "^Minor$" | \
-              grep -v "^Recommendations$" | \
-              grep -v "^Code Quality:$" | \
-              grep -v "^Documentation:$" | \
-              grep -v "^Testing:$" | \
-              grep -v "^Security:$" | \
-              grep -v "^//" | \
-              grep -v "^function" | \
-              grep -v "^  if" | \
-              grep -v "^  }" | \
-              grep -v "^    throw" | \
-              grep -v "^}" | \
-              wc -l | awk '{print $1}')
+            # Minor: Count numbered list items between "#### Minor" and next "###" header
+            MINOR=$(sed -n '/^#### Minor$/,/^###/p' claude-review-report.md | grep "^[0-9]\+\." | wc -l | awk '{print $1}')
 
             # Ensure we have valid numbers
             CRITICAL=${CRITICAL:-0}
