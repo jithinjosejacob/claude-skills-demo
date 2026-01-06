@@ -1,0 +1,32 @@
+{
+  "name": "claude-skills-demo",
+  "version": "1.0.0",
+  "description": "Demo repository for testing Claude Code skills with CI/CD integration",
+  "main": "src/app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "ci-review": "node scripts/ci-review.js",
+    "lint": "echo \"No linter configured\"",
+    "start": "node src/app.js"
+  },
+  "keywords": [
+    "claude",
+    "ai",
+    "code-review",
+    "cicd",
+    "automation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}
