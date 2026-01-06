@@ -62,10 +62,25 @@ jobs:
         if: always()
         run: |
           if [ -f claude-review-report.md ]; then
-            # Check for severity levels
-            CRITICAL=$(grep -i "critical" claude-review-report.md | wc -l || echo "0")
-            MAJOR=$(grep -i "major" claude-review-report.md | wc -l || echo "0")
-            MINOR=$(grep -i "minor" claude-review-report.md | wc -l || echo "0")
+            # Extract issue counts by counting bullet points in each severity section
+
+            # Critical: Check for "None identified" first, otherwise count ❌ bullets
+            if grep -A 1 "^#### Critical" claude-review-report.md | grep -q "None identified"; then
+              CRITICAL=0
+            else
+              CRITICAL=$(sed -n '/^#### Critical/,/^#### /p' claude-review-report.md | grep -c "^- ❌" || echo "0")
+            fi
+
+            # Major: Count ❌ and ⚠️ bullets between "#### Major" and next "####"
+            MAJOR=$(sed -n '/^#### Major/,/^#### /p' claude-review-report.md | grep -E "^- (❌|⚠️)" | wc -l | tr -d ' ')
+
+            # Minor: Count 📝 bullets between "#### Minor" and "---" or next "####"
+            MINOR=$(sed -n '/^#### Minor/,/^---$/p' claude-review-report.md | grep -c "^- 📝" || echo "0")
+
+            # Ensure we have valid numbers
+            CRITICAL=${CRITICAL:-0}
+            MAJOR=${MAJOR:-0}
+            MINOR=${MINOR:-0}
 
             # Check approval status
             if grep -q "Changes requested" claude-review-report.md; then
