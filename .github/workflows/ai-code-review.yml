@@ -198,36 +198,36 @@ jobs:
               console.error('Error posting comment:', error);
             }
 
-      - name: Create Status Check
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        env:
-          CRITICAL: ${{ steps.extract-metadata.outputs.critical }}
-          MAJOR: ${{ steps.extract-metadata.outputs.major }}
-          STATUS_EMOJI: ${{ steps.extract-metadata.outputs.status_emoji }}
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const critical = process.env.CRITICAL || '0';
-            const major = process.env.MAJOR || '0';
-            const statusEmoji = process.env.STATUS_EMOJI || '❓';
-            const reviewOutcome = '${{ steps.ai-review.outcome }}';
+      # - name: Create Status Check
+      #   if: always() && github.event_name == 'pull_request'
+      #   uses: actions/github-script@v7
+      #   env:
+      #     CRITICAL: ${{ steps.extract-metadata.outputs.critical }}
+      #     MAJOR: ${{ steps.extract-metadata.outputs.major }}
+      #     STATUS_EMOJI: ${{ steps.extract-metadata.outputs.status_emoji }}
+      #   with:
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #     script: |
+      #       const critical = process.env.CRITICAL || '0';
+      #       const major = process.env.MAJOR || '0';
+      #       const statusEmoji = process.env.STATUS_EMOJI || '❓';
+      #       const reviewOutcome = '${{ steps.ai-review.outcome }}';
 
-            const state = reviewOutcome === 'failure' ? 'failure' : 'success';
-            const description = `${statusEmoji} Critical: ${critical}, Major: ${major}`;
+      #       const state = reviewOutcome === 'failure' ? 'failure' : 'success';
+      #       const description = `${statusEmoji} Critical: ${critical}, Major: ${major}`;
 
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.payload.pull_request.head.sha,
-              state: state,
-              target_url: `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
-              description: description,
-              context: 'AI Code Review'
-            });
+      #       await github.rest.repos.createCommitStatus({
+      #         owner: context.repo.owner,
+      #         repo: context.repo.repo,
+      #         sha: context.payload.pull_request.head.sha,
+      #         state: state,
+      #         target_url: `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+      #         description: description,
+      #         context: 'AI Code Review Report'
+      #       });
 
-      # - name: Check Review Status
-      #   if: steps.ai-review.outcome == 'failure'
-      #   run: |
-      #     echo "⚠️ AI Review found blocking issues"
-      #     exit 1
+      - name: Check Review Status
+        if: steps.ai-review.outcome == 'failure'
+        run: |
+          echo "⚠️ AI Review found blocking issues"
+          exit 1
