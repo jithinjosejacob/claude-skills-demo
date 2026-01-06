@@ -64,9 +64,39 @@ The workflow runs on:
    - Collects all code files from `src/`
    - Calls Claude API with comprehensive context
    - Generates a detailed review report
-4. **Report**: Uploads the report as an artifact
-5. **Comment**: Posts the review as a PR comment (for pull requests)
-6. **Status Check**: Fails the build if critical issues are found
+4. **Job Summary**: Displays full review in GitHub Actions summary page
+5. **Extract Metadata**: Analyzes the report for issue counts and severity
+6. **Upload Artifact**: Saves the report as a downloadable artifact
+7. **PR Comment**: Posts a collapsible review summary on the pull request
+8. **Status Check**: Creates a commit status with issue counts
+9. **Build Status**: Fails the build if critical issues are found
+
+### Where to View Reviews
+
+The review results are visible in **multiple locations**:
+
+#### 1. GitHub Actions Summary Tab
+- **Location**: Actions → Select workflow run → Summary tab
+- **Shows**: Complete review report with all details
+- **Best for**: Full analysis and detailed findings
+
+#### 2. Pull Request Comment
+- **Location**: On the PR conversation tab
+- **Shows**: Collapsible summary with:
+  - Quick stats table (Critical/Major/Minor counts)
+  - Expandable full review details
+  - Link to full report in Actions
+- **Best for**: Quick review at a glance
+
+#### 3. PR Checks Section
+- **Location**: PR → "Checks" tab or status icons
+- **Shows**: Pass/fail status with issue counts
+- **Best for**: Quick status verification
+
+#### 4. Downloadable Artifact
+- **Location**: Actions → Select workflow run → Artifacts section
+- **Shows**: Full markdown report file
+- **Best for**: Offline review or archiving
 
 ### Review Criteria
 
@@ -193,10 +223,40 @@ cat claude-review-report.md
 ## Example Output
 
 When the workflow runs, you'll see:
-1. ✅ Workflow status in the Actions tab
-2. 📄 Review report as a downloadable artifact
-3. 💬 Comment on the PR with review findings
-4. ❌ or ✅ Build status based on severity
+
+### 1. Actions Summary Page
+```
+🤖 AI Code Review Summary
+
+## PR Review Summary
+[Full detailed review report displayed here...]
+```
+
+### 2. PR Comment
+```
+🤖 AI Code Review Report
+
+Review Summary
+| Status | Critical | Major | Minor |
+|--------|----------|-------|-------|
+| ✅ approved with suggestions | 0 | 2 | 5 |
+
+📋 Full Review Details (click to expand)
+```
+
+### 3. PR Status Checks
+```
+✅ AI Code Review - ✅ Critical: 0, Major: 2
+```
+
+### 4. Build Status
+- ✅ **Success**: No critical issues found
+- ❌ **Failure**: Critical or major blocking issues detected
+
+The workflow will **fail the build** if:
+- Critical security vulnerabilities found
+- Major bugs or issues requiring changes
+- Review status is "Changes requested"
 
 ## Next Steps
 
